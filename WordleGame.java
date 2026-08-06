@@ -96,6 +96,7 @@ public class WordleGame {
         while (attemptsUsed < 6) {
             System.out.print("Enter your guess: ");
             if (!scanner.hasNextLine()) {
+                System.out.print(" ");
                 return;
             }
 
