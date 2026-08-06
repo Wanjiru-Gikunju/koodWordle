@@ -15,6 +15,7 @@ public class WordleGame {
     private final Scanner scanner;
     private final Path wordListPath;
     private final Path statsPath;
+    private String username;
 
     public WordleGame() {
         scanner = new Scanner(System.in);
@@ -28,15 +29,34 @@ public class WordleGame {
     }
 
     public void run(String[] args) {
+        if (args.length == 0) {
+            System.out.println("Please provide a number as command line argument");
+            return;
+        }
+        if (args.length > 1) {
+            System.out.println("Invalid command-line argument. Please launch with a valid number.");
+            return;
+        }
+
+        int requestedIndex;
+        try {
+            requestedIndex = Integer.parseInt(args[0]);
+        } catch (NumberFormatException exception) {
+            System.out.println("Invalid command-line argument. Please launch with a valid number.");
+            return;
+        }
+
         List<String> words = readWords();
         if (words.isEmpty()) {
             System.out.println("Word list file is missing or empty.");
             return;
         }
 
-        int wordIndex = getWordIndex(args, words.size());
-        if (wordIndex < 0) {
-            System.out.println("Invalid word index.");
+        if (requestedIndex < 0 || requestedIndex >= words.size()) {
+            System.out.println("Press Enter to exit...");
+            if (scanner.hasNextLine()) {
+                scanner.nextLine();
+            }
             return;
         }
 
@@ -44,12 +64,12 @@ public class WordleGame {
         if (!scanner.hasNextLine()) {
             return;
         }
-        String username = scanner.nextLine().trim();
+        username = scanner.nextLine().trim();
         if (username.isEmpty()) {
             username = "Player";
         }
 
-        playGame(username, words.get(wordIndex));
+        playGame(username, words.get(requestedIndex), words);
     }
 
     private List<String> readWords() {
@@ -67,54 +87,47 @@ public class WordleGame {
         return words;
     }
 
-    private int getWordIndex(String[] args, int wordCount) {
-        if (args.length != 1) {
-            return -1;
-        }
-        try {
-            int index = Integer.parseInt(args[0]);
-            if (index >= 0 && index < wordCount) {
-                return index;
-            }
-        } catch (NumberFormatException exception) {
-            return -1;
-        }
-        return -1;
-    }
-
-    private void playGame(String username, String secretWord) {
+    private void playGame(String username, String secretWord, List<String> words) {
         Set<Character> remainingLetters = createAlphabet();
         int attemptsUsed = 0;
         boolean won = false;
 
-        System.out.println("Welcome to Wordle!");
+        System.out.println("Welcome to Wordle! Guess the 5-letter word.");
         while (attemptsUsed < 6) {
-            System.out.print("Enter a 5-letter word: ");
+            System.out.print("Enter your guess: ");
             if (!scanner.hasNextLine()) {
                 return;
             }
 
-            String guess = scanner.nextLine().trim().toLowerCase(Locale.ROOT);
-            if (!guess.matches("[a-z]{5}")) {
-                System.out.println("Please enter a valid 5-letter word.");
+            String guess = scanner.nextLine();
+            if (!guess.matches("[a-z]+")) {
+                System.out.println(" Your guess must only contain lowercase letters.");
+                continue;
+            }
+            if (guess.length() != 5) {
+                System.out.println(" Your guess must be exactly 5 letters long.");
+                continue;
+            }
+            if (!words.contains(guess)) {
+                System.out.println(" Word not in list. Please enter a valid word.");
                 continue;
             }
 
             attemptsUsed++;
-            String feedback = feedbackFor(guess, secretWord, remainingLetters);
-            System.out.println(feedback);
-            System.out.println("Remaining attempts: " + (6 - attemptsUsed));
-            System.out.println("Remaining letters: " + lettersToString(remainingLetters));
-
             if (guess.equals(secretWord)) {
                 won = true;
-                System.out.println("Congratulations! You guessed the word.");
+                System.out.println(" Congratulations! You've guessed the word correctly.");
                 break;
             }
+
+            String feedback = feedbackFor(guess, secretWord, remainingLetters);
+            System.out.println(" Feedback: " + feedback);
+            System.out.println("Remaining letters: " + lettersToString(remainingLetters));
+            System.out.println("Attempts remaining: " + (6 - attemptsUsed));
         }
 
         if (!won) {
-            System.out.println("You ran out of attempts. The word was: " + secretWord.toUpperCase(Locale.ROOT));
+            System.out.println("Game over. The correct word was: " + secretWord);
         }
 
         writeStats(username, secretWord, attemptsUsed, won);
@@ -193,7 +206,7 @@ public class WordleGame {
     }
 
     private void askToShowStats() {
-        System.out.print("View stats? (yes/no): ");
+        System.out.print("Do you want to see your stats? (yes/no): ");
         if (!scanner.hasNextLine()) {
             return;
         }
@@ -204,12 +217,32 @@ public class WordleGame {
     }
 
     private void showStats() {
+        int gamesPlayed = 0;
+        int gamesWon = 0;
+        int attempts = 0;
         try {
             for (String line : Files.readAllLines(statsPath, StandardCharsets.UTF_8)) {
-                System.out.println(line);
+                String[] values = line.split(",", -1);
+                if (values.length == 4 && values[0].equals(username)) {
+                    gamesPlayed++;
+                    if (values[3].equals("win")) {
+                        gamesWon++;
+                    }
+                    attempts += Integer.parseInt(values[2]);
+                }
             }
         } catch (IOException exception) {
             System.out.println("No stats available.");
+            return;
+        } catch (NumberFormatException exception) {
+            System.out.println("No stats available.");
+            return;
         }
+        System.out.println("Stats for " + username + ":");
+        System.out.println("Games played: " + gamesPlayed);
+        System.out.println("Games won: " + gamesWon);
+        double averageAttempts = gamesPlayed == 0 ? 0.0 : (double) attempts / gamesPlayed;
+        System.out.println("Average attempts per game: " + averageAttempts);
     }
+
 }
